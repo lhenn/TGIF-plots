@@ -4,6 +4,8 @@ const svg = d3.select('.canvas')
     .attr('width', 500)
     .attr('height', 400);
 
+
+
 // margins and dimensions
 const margin = {top:20, right:20, bottom: 100, left: 100};
 const graphWidth = 500 - margin.left - margin.right;
@@ -20,6 +22,22 @@ const xAxisGroup = graph.append('g')
 
 const yAxisGroup = graph.append('g');
 
+svg.append("text")
+  .attr("class", "x label")
+  .attr("text-anchor", "end")
+  .attr("x", graphWidth)
+  .attr("y", graphHeight + margin.bottom/1.5)
+  .text("Votes with party (%)");
+
+svg.append("text")
+    .attr("class", "y label")
+    .attr("text-anchor", "end")
+    .attr("y", margin.left/2)
+    .attr("x", 0-graphHeight/3)
+    .attr("dy", "10px")
+    .attr("transform", "rotate(-90)")
+    .text("Congress members (count)");
+
 // scales
 const x = d3.scaleLinear()
   .range([0, graphWidth]);
@@ -32,53 +50,64 @@ const y = d3.scaleLinear()
 const xAxis = d3.axisBottom(x);
 const yAxis = d3.axisLeft(y);
 
+
+
 // ------ update function -------
-const update = (data, party) => {
-  console.log(party);
+const update = (total, data, party) => {
+
   let fillColor = '';
   if(party === 't') fillColor = 'grey';
   if(party === 'd') fillColor = 'blue';
   if(party === 'r') fillColor = 'red';
-  console.log(fillColor);
-  data = [...data];
 
-  var count = 10;
-  x.domain(d3.extent(data))
+  var count = 20;
+  x.domain(d3.extent(total))
     .nice(count);
-
 
   const histogram = d3.histogram()
     .domain(x.domain())
     .thresholds(x.ticks(count));
 
+  const totalBins = histogram(total);
   const bins = histogram(data);
 
-  y.domain([0, d3.max(bins.map(bin => bin.length))]);
+  y.domain([0, d3.max(totalBins.map(bin => bin.length))]);
 
   const rects = graph.selectAll('rect')
     .data(bins);
 
   rects.exit().remove();
-
-  rects.attr("x", 1)
-  .attr("transform", function (d) { return "translate(" + x(d.x0) + "," + y(d.length) + ")";})
-    .attr("width", function(d) {return x(d.x1) - x(d.x0); })
-    .attr("height", function(d) { return graphHeight - y(d.length); })
+  const t = d3.transition().duration(1000)
+  rects.attr("x", d => x(d.x0)+1)
+    .attr("width", (d => d.length == 0 ? 0 : (x(d.x1) - x(d.x0))-1))
+    .attr("y", graphHeight)
+    .attr("height", 0)
     .style("fill", fillColor)
+    .transition(t)
+      .attr('y', d => y(d.length))
+      .attr('height', d => graphHeight - y(d.length))
+
 
   rects.enter()
     .append("rect")
-      .attr("x", 1)
-      .attr("transform", function (d) { return "translate(" + x(d.x0) + "," + y(d.length) + ")";})
-      .attr("width", function(d) {return x(d.x1) - x(d.x0); })
-      .attr("height", function(d) { return graphHeight - y(d.length); })
+      .attr("x", d => x(d.x0)+1)
+      .attr("width", (d => d.length == 0 ? 0 : (x(d.x1) - x(d.x0))-1))
+      .attr("y", graphHeight)
+      .attr("height", 0)
       .style("fill", fillColor)
+      .transition(t)
+        .attr('y', d => y(d.length))
+        .attr('height', d => graphHeight - y(d.length))
+
+  xAxis.ticks(5)
+    .tickFormat(d => d + '%')
+
 
   xAxisGroup.call(xAxis);
   yAxisGroup.call(yAxis);
 }
 
-const propublicaURL = "https://api.propublica.org/congress/v1/113/senate/members.json";
+const propublicaURL = "https://api.propublica.org/congress/v1/113/house/members.json";
 const propublicaAPIkey = 'E58FNEqHGDgcK00Ty0XoyVpupxkLQXMc3okUc8EU';
 
 d3.json(propublicaURL, {
@@ -99,7 +128,8 @@ d3.json(propublicaURL, {
       .filter(m => m.party === "D")
       .map(m => m.votes_with_party_pct);
 
-    update(total,'t');
+
+    update(total, total, 't');
 
     const options = document.getElementsByName('dataset');
 
@@ -108,16 +138,24 @@ d3.json(propublicaURL, {
         let datasetChoice = this.value;
         switch(datasetChoice) {
           case 'total':
-            update(total, 't');
+            update(total, total, 't');
             break;
           case 'democrats':
-            update(democrats, 'd');
+            update(total, democrats, 'd');
             break;
           case 'republicans':
-            update(republicans, 'r');
+            update(total, republicans, 'r');
             break;
           default:
         }
       })
     }
   })
+
+// const heightTween = (d) => {
+//   let i = d3.interpolate(0, y.height);
+//
+//   return function(t) {
+//     return i(t)
+//   }
+// }
